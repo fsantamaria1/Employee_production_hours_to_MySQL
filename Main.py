@@ -41,6 +41,7 @@ default_data_types = {
 
 class FilesClass:
     """Can be used to find files, move files to a different folder, etc"""
+
     def __init__(self, folder_path: str):
         self.original_folder_path = folder_path
 
@@ -81,6 +82,7 @@ class FilesClass:
 
 class CSVsClass(FilesClass):
     """Used to find and move CSV files"""
+
     def __init__(self, root_folder_path: str):
         super().__init__(root_folder_path)
         self.path = None
@@ -103,6 +105,7 @@ class CSVsClass(FilesClass):
 
 class DataFrameClass:
     """Used to perform all the necessary dataframe actions"""
+
     def __init__(self):
         self.requiredHeaders = [
             "EMP",
@@ -187,7 +190,9 @@ class DataFrameClass:
 
 class MySQLClass:
     """Used to check, create, and write records to the database as well as create tables"""
+
     def __init__(self, database_table_name: str):
+        # self.connection = pymysql.connect(host="host", port=port, user="user", passwd="password", db="database")
         self.connection = pymysql.connect(host="host", port="port", user="user", passwd="password",
                                           db="database", charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
         self.cursor = self.connection.cursor()
@@ -302,7 +307,7 @@ class MySQLClass:
         print(create_table_str)
         self.cursor.execute(create_table_str)
 
-    def write_records_to_database(self, final_dataframe_without_matching_database_records: pandas.DataFrame):
+    def write_records_to_database(self, final_dataframe_without_matching_database_records: pd.DataFrame):
         """"Writes the records from the processed dataframe to the database"""
         self.df_insert = final_dataframe_without_matching_database_records
         # Will contain necessary fields
@@ -347,7 +352,7 @@ class MySQLClass:
 
         print(self.insert_statement)
 
-        # LThis loop will add the actual values to the statement and insert them
+        # This loop will add the actual values to the statement and insert them
         for index, row in self.df_insert.iterrows():
             # A tuple is needed to insert the values into the MySQL db
             list_of_row_values = ()
@@ -358,4 +363,5 @@ class MySQLClass:
         self.connection.escape_string(self.insert_statement)
         # If the connection is not committed, the values never get inserted into the database
         self.connection.commit()
+
 
