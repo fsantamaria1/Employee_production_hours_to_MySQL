@@ -5,8 +5,6 @@ import shutil
 
 class FilesClass:
     """Can be used to find files, move files to a different folder, etc"""
-
-    # def __init__(self, folder_path=r"C:\Timesheets\Labor Hour Imports\CSVs"):
     def __init__(self, folder_path: str):
         self.original_folder_path = folder_path
 
@@ -45,3 +43,23 @@ class FilesClass:
         return path_only, filename, extension_without_period
 
 
+class CSVsClass(FilesClass):
+    """Used to find and move CSV files"""
+    def __init__(self, root_folder_path: str):
+        super().__init__(root_folder_path)
+        self.path = None
+        self.file_name = None
+        self.extension = None
+
+    def find_one_file(self, *kwargs) -> str or None:
+        """"Finds all the files in the given path but returns only one from the list"""
+        file_list = super().find_files("csv")
+        if file_list is not None:
+            self.path, self.file_name, self.extension = super().path_parser(file_list[0])
+            return file_list[0]
+        else:
+            return None
+
+    def move_file(self, destination_folder_path: str):
+        """Moves the file to the given destination path"""
+        super().move_file_to_folder(destination_folder_path, self.file_name, "csv")
