@@ -3,6 +3,8 @@ import glob
 import shutil
 import pandas as pd
 import pymysql.cursors
+from datetime import *
+import time
 
 headers_dict = {
     1: "EMP",
@@ -192,8 +194,8 @@ class MySQLClass:
     """Used to check, create, and write records to the database as well as create tables"""
 
     def __init__(self, database_table_name: str):
-        # self.connection = pymysql.connect(host="host", port=port, user="user", passwd="password", db="database")
-        self.connection = pymysql.connect(host="host", port="port", user="user", passwd="password",
+        # Needs correct credentials
+        self.connection = pymysql.connect(host="host", port=0000, user="user", passwd="password",
                                           db="database", charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
         self.cursor = self.connection.cursor()
         self.table_name = database_table_name
@@ -365,3 +367,81 @@ class MySQLClass:
         self.connection.commit()
 
 
+def _main_():
+    # root_folder_path = r"Y:\Timesheets\Labor Hour Imports\CSVs"
+    main_folder_path = r"C:\Timesheets\Labor Hour Imports\CSVs"
+    # Path where the original files will be moved to
+    archived_folder_path = r"C:\Timesheets\Labor Hour Imports\CSVs\Archived"
+    # Path where the files with errors or existing records will be moved to
+    existing_records_folder_path = r"C:\Timesheets\Labor Hour Imports\CSVs\Archived\FilesWithExistingRecords"
+    # Path where the files with errors will be moved to
+    error_file_path = r"C:\Timesheets\Labor Hour Imports\CSVs\Archived\FilesWithErrors"
+    # Event ID will be used as the primary key
+    event_id = str(datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+
+    print("\nEvent ID: {0}".format(event_id))
+
+    # Class objects
+    csv_class_obj = CSVsClass(main_folder_path)
+    df_class_obj = DataFrameClass()
+    # Needs correct table name
+    my_sql_class_obj = MySQLClass('table_name')
+
+    try:
+        first_file_found = csv_class_obj.find_one_file()
+
+        # Check if there were any files found; otherwise, raise an exception
+        if first_file_found is None:
+            raise FileNotFoundError
+
+        file_name_only = csv_class_obj.file_name
+
+        # Creates dataframe without headers using the file's data
+        df_no_headers = df_class_obj.create_dataframe_without_headers(first_file_found)
+
+        # Deletes columns with only null values from the dataframe
+        df_no_empty_columns = df_class_obj.delete_empty_columns(df_no_headers)
+
+        # Adds headers to the dataframe
+        df_with_headers = df_class_obj.add_headers(df_no_empty_columns)
+
+        # Deleted all the empty rows from the dataframe
+        df_no_empty_rows = df_class_obj.delete_empty_rows(df_with_headers)
+
+        # Adds extra fields to the dataframe like EVENT_ID and ORIGINAL_FILE_NAME
+        df_extra_fields = df_class_obj.add_extra_fields(df_no_empty_rows, event_id, file_name_only)
+
+        # Adds the correct format/datatype to the dataframe's fields and gets rid of null values
+        df_formatted = df_class_obj.format_fields(df_extra_fields)
+
+        # Delete empty spaces from strings
+        df_no_empty_spaces = df_class_obj.delete_extra_spaces(df_formatted)
+
+        my_sql_class_obj.create_table_if_not_exists()
+        selected_result = my_sql_class_obj.check_database_records(df_no_empty_spaces)
+
+    except FileNotFoundError:
+        print("No Files Found")
+        time.sleep(10)
+    except pd.errors.EmptyDataError:
+        print("No Data Found in File")
+        # Move file to the Error folder
+        csv_class_obj.move_file(error_file_path)
+    except UnicodeDecodeError:
+        print("Cannot Decode File")
+        # Move file to the Archived folder
+        csv_class_obj.move_file(error_file_path)
+    else:
+        print("No Errors Found")
+        if selected_result is not None:
+            # Move file to the Archived folder
+            csv_class_obj.move_file(existing_records_folder_path)
+        elif selected_result is None:
+            # Move file to the Archived folder
+            csv_class_obj.move_file(archived_folder_path)
+            my_sql_class_obj.write_records_to_database(df_no_empty_spaces)
+        print("Completed\n")
+
+
+while True:
+    _main_()
