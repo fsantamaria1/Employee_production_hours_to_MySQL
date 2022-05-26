@@ -2,6 +2,7 @@ import os
 import glob
 import shutil
 import pandas as pd
+import pymysql.cursors
 
 headers_dict = {
     1: "EMP",
@@ -182,4 +183,179 @@ class DataFrameClass:
                 self.df_with_format[headers_dict[key]] = pd.to_datetime(self.df_with_format[headers_dict[key]])
 
         return self.df_with_format
+
+
+class MySQLClass:
+    """Used to check, create, and write records to the database as well as create tables"""
+    def __init__(self, database_table_name: str):
+        self.connection = pymysql.connect(host="host", port="port", user="user", passwd="password",
+                                          db="database", charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
+        self.cursor = self.connection.cursor()
+        self.table_name = database_table_name
+        self.db_table_fields = {
+            1: "ID",
+            2: "BATCH_ID",
+            3: "EMP",
+            4: "TYPE",
+            5: "UNITS",
+            6: "HOURS",
+            7: "DATE",
+            8: "JOB",
+            9: "PHASE",
+            10: "CAT",
+            11: "EQUIP_NUM",
+            12: "EQUIP_CODE",
+            13: "EQUIP_HRS",
+            14: "WORK_TYPE",
+            15: "COST_TYPE",
+            16: "EQ_DATE",
+            17: "ORIGINAL_FILE_NAME"
+        }
+
+        self.db_table_data_types = {
+            1: "INT AUTO_INCREMENT PRIMARY KEY",
+            2: "TEXT NOT NULL",
+            3: "TEXT NOT NULL",
+            4: "INTEGER NOT NULL",
+            5: "FLOAT",
+            6: "FLOAT",
+            7: "DATE NOT NULL",
+            8: "TEXT NOT NULL",
+            9: "TEXT NOT NULL",
+            10: "TEXT NOT NULL",
+            11: "TEXT",
+            12: "TEXT",
+            13: "FLOAT",
+            14: "INTEGER NOT NULL",
+            15: "INTEGER NOT NULL",
+            16: "DATE",
+            17: "TEXT"
+        }
+
+    def check_database_records(self, dataframe_with_rows: pd.DataFrame) -> dict or None:
+        """Checks if the database contains matching records based on the first row of the given dataframe"""
+        self.data = dataframe_with_rows
+        self.first_record = self.data.iloc[0]
+        self.result = None
+        # Copy of the data types dictionary which will contain everything but floats
+        self.non_floats = {}
+        # Iterate through the data types dictionary and copy all the keys and values skipping floats
+        for key, value in default_data_types.items():
+            if value is not "FLOAT":
+                self.non_floats[key] = value
+        # Starting select statement
+        self.select_str = f"""SELECT *  FROM {self.table_name} WHERE """
+        # Grab the last key from the dictionary
+        last_key = list(self.non_floats.keys())[-1]
+        # Loop through the non floats dictionary
+        for key, value in self.non_floats.items():
+            #  Append the matching header
+            self.select_str += headers_dict[key]
+            self.select_str += " = "
+            # Append the matching row values from the database
+            self.select_str += f"'{self.first_record[headers_dict[key]]}'"
+            if key is not last_key:
+                self.select_str += " AND "
+            elif key is last_key:
+                self.select_str += ";"
+        print(self.select_str)
+        # Assign result's batch ID to variable
+        self.selected_results = self.cursor.execute(self.select_str)
+        print("Number of results: ", self.selected_results)
+
+        if self.selected_results > 0:
+            self.result = self.cursor.fetchone()
+            print("First result: ", self.result)
+            print("BATCH_ID: ", self.result['BATCH_ID'])
+            print("Result type: ", type(self.result))
+
+        return self.result
+
+    # not being used right now
+    def retrieve_results_using_batch_id(self, batch_id: str) -> 'tuple(int, dict)':
+        """Returns the number of results and all the results with the same batch_id"""
+        self.batch_id = batch_id
+        # Starting select statement
+        self.select_str = f"""SELECT *  FROM {self.table_name} WHERE BATCH_ID = '{self.batch_id}'"""
+        print("Select by BATCH_ID: ", self.select_str)
+
+        self.results_by_batch_id = self.cursor.execute(self.select_str)
+        print("Number of results by BATCH_ID: ", self.results_by_batch_id)
+        self.all_the_results = self.cursor.fetchall()
+        return self.results_by_batch_id, self.all_the_results
+
+    def create_table_if_not_exists(self):
+        """Creates a table if one with the same name does not exist"""
+
+        # create string with fields and data types
+        create_table_str = f"""CREATE TABLE IF NOT EXISTS {self.table_name} ("""
+        last_key_number = list(self.db_table_fields.keys())[-1]
+        for key, value in self.db_table_fields.items():
+            create_table_str += value
+            create_table_str += " "
+            create_table_str += self.db_table_data_types[key]
+            if key is not last_key_number:
+                create_table_str += ", "
+            if key is last_key_number:
+                create_table_str += ")"
+
+        print(create_table_str)
+        self.cursor.execute(create_table_str)
+
+    def write_records_to_database(self, final_dataframe_without_matching_database_records: pandas.DataFrame):
+        """"Writes the records from the processed dataframe to the database"""
+        self.df_insert = final_dataframe_without_matching_database_records
+        # Will contain necessary fields
+        self.fields = {}
+
+        # Copy necessary fields
+        for key, value in self.db_table_fields.items():
+            # Skip the 1 key since it is an auto_increment primary key
+            if key is not 1:
+                self.fields[key] = value
+
+        self.insert_statement = f"""INSERT INTO {self.table_name}"""
+
+        self.last_field_key = list(self.fields.keys())[-1]
+        self.first_field_key = list(self.fields.keys())[0]
+
+        # Add fields to statement
+        for key, value in self.fields.items():
+            if key is self.first_field_key:
+                self.insert_statement += " ("
+
+            self.insert_statement += value
+
+            if key is self.last_field_key:
+                self.insert_statement += ") "
+            else:
+                self.insert_statement += ", "
+
+        self.insert_statement += "VALUES"
+
+        # After this loop, the statement will be completed
+        for key in self.fields.keys():
+            if key is self.first_field_key:
+                self.insert_statement += " ("
+            # Statement needs %s placeholders
+            self.insert_statement += "%s"
+
+            if key is self.last_field_key:
+                self.insert_statement += ")"
+            else:
+                self.insert_statement += ","
+
+        print(self.insert_statement)
+
+        # LThis loop will add the actual values to the statement and insert them
+        for index, row in self.df_insert.iterrows():
+            # A tuple is needed to insert the values into the MySQL db
+            list_of_row_values = ()
+            for value in self.fields.values():
+                list_of_row_values += (row[value],)
+            print(list_of_row_values)
+            self.cursor.executemany(self.insert_statement, [list_of_row_values])
+        self.connection.escape_string(self.insert_statement)
+        # If the connection is not committed, the values never get inserted into the database
+        self.connection.commit()
 
