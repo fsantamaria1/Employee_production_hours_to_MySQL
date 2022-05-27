@@ -195,8 +195,11 @@ class MySQLClass:
 
     def __init__(self, database_table_name: str):
         # Needs correct credentials
+        ################################################################################################################
         self.connection = pymysql.connect(host="host", port=0000, user="user", passwd="password",
                                           db="database", charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
+        ################################################################################################################
+
         self.cursor = self.connection.cursor()
         self.table_name = database_table_name
         self.db_table_fields = {
@@ -274,11 +277,11 @@ class MySQLClass:
             self.result = self.cursor.fetchone()
             print("First result: ", self.result)
             print("BATCH_ID: ", self.result['BATCH_ID'])
-            print("Result type: ", type(self.result))
 
         return self.result
 
-    # not being used right now
+    # Not being used right now
+    # Can used to loop through all the dataframe rows and compare them to the db records
     def retrieve_results_using_batch_id(self, batch_id: str) -> 'tuple(int, dict)':
         """Returns the number of results and all the results with the same batch_id"""
         self.batch_id = batch_id
@@ -384,9 +387,11 @@ def _main_():
     # Class objects
     csv_class_obj = CSVsClass(main_folder_path)
     df_class_obj = DataFrameClass()
-    # Needs correct table name
-    my_sql_class_obj = MySQLClass('table_name')
 
+    # Needs correct table name
+    ####################################################################################################################
+    my_sql_class_obj = MySQLClass('table_name')
+    ####################################################################################################################
     try:
         first_file_found = csv_class_obj.find_one_file()
 
@@ -434,9 +439,11 @@ def _main_():
     else:
         print("No Errors Found")
         if selected_result is not None:
+            print("Matching records found in database")
             # Move file to the Archived folder
             csv_class_obj.move_file(existing_records_folder_path)
         elif selected_result is None:
+            print("Inserting records into database")
             # Move file to the Archived folder
             csv_class_obj.move_file(archived_folder_path)
             my_sql_class_obj.write_records_to_database(df_no_empty_spaces)
